@@ -10,5 +10,152 @@ $("clear").onclick=()=>{d.corners=[];save();render();$("sketch").textContent="Pi
 $("export").onclick=()=>{read();let blob=new Blob([JSON.stringify(d)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="ukur-bidang.json";a.click();URL.revokeObjectURL(u)};
 $("import").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.project||!Array.isArray(x.points))throw 0;if(confirm("Impor mengganti proyek aktif. Lanjutkan?")){d=x;save();fields.forEach(k=>$(k).value=d.project[k]||"");render()}}catch{alert("File ekspor tidak valid.")}};r.readAsText(f);e.target.value=""};
 $("report").onclick=()=>{read();let w=window.open("","_blank");if(!w){alert("Izinkan pop-up browser untuk membuat laporan.");return}let p=d.project,pts=d.points.map(x=>`<tr><td>${x.id}</td><td>${esc(x.type)}</td><td>${coords(x)}</td><td>${x.acc==null?"—":"±"+Math.round(x.acc)+" m"}</td><td>${new Date(x.time).toLocaleString("id-ID")}</td></tr>`).join(""),sides=d.sides.map(s=>`<tr><td>${s.a}–${s.b}</td><td>${s.len} m</td><td>${esc(s.note)}</td></tr>`).join(""),photos=d.points.map(x=>`<section class="photo"><h2>${x.id} — ${esc(x.type)}</h2>${x.photo?`<img src="${x.photo}">`:""}<p>${coords(x)} · ${new Date(x.time).toLocaleString("id-ID")}</p><p>${esc(x.note)}</p></section>`).join(""),sk=$("sketch").querySelector("svg")?.outerHTML||"Sketsa belum dibuat.";w.document.write(`<!doctype html><html lang="id"><meta charset="utf-8"><title>Laporan Ukur Bidang</title><style>body{font:12px Arial;margin:22px}table{border-collapse:collapse;width:100%;margin:10px 0 20px}td,th{border:1px solid #888;padding:6px;text-align:left}.map svg{width:100%}.photo{page-break-before:always}.photo img{max-width:100%;max-height:65vh}h1{font-size:22px}.notice{border:1px solid #999;padding:10px}</style><h1>Laporan Dokumentasi dan Pengukuran Bidang</h1><p>Nama/ID: ${esc(p.jobName||"—")} · Tanggal: ${esc(p.jobDate||"—")}</p><p>Desa: ${esc(p.village||"—")} · Kecamatan/Kabupaten: ${esc(p.district||"—")}</p><p>Petugas: ${esc(p.surveyor||"—")} · Tujuan: ${esc(p.purpose||"—")}</p><h2>Sketsa bidang</h2><div class="map">${sk}</div><h2>Daftar titik</h2><table><tr><th>ID</th><th>Jenis</th><th>Koordinat</th><th>Akurasi</th><th>Waktu</th></tr>${pts}</table><h2>Ukuran sisi manual</h2><table><tr><th>Antartitik</th><th>Panjang</th><th>Catatan</th></tr>${sides}</table><div class="notice">GPS HP memiliki kesalahan posisi yang dapat mencapai beberapa meter atau lebih. Luas dan sketsa GPS adalah estimasi awal. Dokumen ini bukan pengganti penetapan batas resmi atau dokumen pertanahan.</div>${photos}<script>onload=()=>setTimeout(()=>print(),400)<\/script></html>`);w.document.close()};
+
+// --- Experimental WebXR distance measurement ---
+const arState = { session:null, gl:null, layer:null, viewerSpace:null, hitSource:null,
+  refSpace:null, points:[], latestPose:null, frameHandle:null, program:null, buffer:null,
+  canvas:null, buttonPending:false, startedAt:0 };
+
+function arMessage(message){ const el=$("arStatus"); if(el) el.textContent=message; }
+function arReadout(){
+  const a=arState.points[0], b=arState.points[1];
+  let distText="—";
+  if(a&&b){
+    const dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+    distText=(Math.sqrt(dx*dx+dy*dy+dz*dz)).toFixed(3)+" m (estimasi AR)";
+  }
+  $("arReadout").textContent=`Titik 1: ${a?"tersimpan":"—"} · Titik 2: ${b?"tersimpan":"—"} · Jarak: ${distText}`;
+}
+function arSetLength(){
+  const a=arState.points[0],b=arState.points[1];
+  if(!a||!b){ arMessage("Tandai dua titik terlebih dahulu."); return; }
+  const dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+  const meters=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  $("length").value=meters.toFixed(2);
+  $("sideNote").value="Hasil kamera AR eksperimental: "+meters.toFixed(3)+" m; wajib diverifikasi dengan meteran.";
+  $("arSection").scrollIntoView({behavior:"smooth",block:"start"});
+  arMessage("Jarak dipindahkan ke kolom panjang sisi. Pilih titik awal/akhir, lalu tekan Simpan ukuran sisi setelah diverifikasi.");
+}
+function arMakeProgram(gl){
+  const vs=gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs,`attribute vec3 p; uniform mat4 mvp; void main(){ gl_Position=mvp*vec4(p,1.0); gl_PointSize=14.0; }`);
+  gl.compileShader(vs);
+  const fs=gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs,`precision mediump float; void main(){ gl_FragColor=vec4(1.0,0.85,0.1,1.0); }`);
+  gl.compileShader(fs);
+  const pr=gl.createProgram(); gl.attachShader(pr,vs); gl.attachShader(pr,fs); gl.bindAttribLocation(pr,0,"p"); gl.linkProgram(pr);
+  if(!gl.getProgramParameter(pr,gl.LINK_STATUS)) throw new Error("Shader AR tidak dapat disiapkan.");
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,0]),gl.STATIC_DRAW);
+  return {program:pr,buffer:buf};
+}
+function arDrawReticle(gl,pose,proj){
+  if(!pose)return;
+  const m=pose.transform.matrix;
+  gl.useProgram(arState.program);
+  gl.bindBuffer(gl.ARRAY_BUFFER,arState.buffer);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+  const mvp=new Float32Array(16);
+  // projection * view * hit pose transform
+  const view=arState.currentView;
+  if(!view)return;
+  const pv=new Float32Array(16), out=new Float32Array(16);
+  mat4Multiply(pv,view.projectionMatrix,view.transform.inverse.matrix);
+  mat4Multiply(out,pv,m);
+  gl.uniformMatrix4fv(gl.getUniformLocation(arState.program,"mvp"),false,out);
+  gl.drawArrays(gl.POINTS,0,1);
+}
+function mat4Multiply(out,a,b){
+  for(let c=0;c<4;c++) for(let r=0;r<4;r++){
+    out[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
+  }
+  return out;
+}
+async function arStart(){
+  if(!window.isSecureContext){ arMessage("AR memerlukan HTTPS. Buka melalui URL pages.dev/https, bukan file lokal."); return; }
+  if(!navigator.xr){ arMessage("Browser ini tidak menyediakan WebXR. Pengukuran manual dan GPS tetap dapat digunakan."); return; }
+  try{
+    const supported=await navigator.xr.isSessionSupported("immersive-ar");
+    if(!supported){ arMessage("Perangkat/browser ini belum melaporkan dukungan WebXR AR. Fitur manual tetap tersedia."); return; }
+    const session=await navigator.xr.requestSession("immersive-ar",{
+      requiredFeatures:["hit-test"],
+      optionalFeatures:["dom-overlay"],
+      domOverlay:{root:$("arSection")}
+    });
+    arState.session=session; arState.points=[]; arReadout();
+    const canvas=document.createElement("canvas"); canvas.id="arCanvas"; canvas.setAttribute("aria-label","Tampilan kamera AR");
+    $("arSection").insertBefore(canvas,$("arStatus"));
+    const gl=canvas.getContext("webgl",{xrCompatible:true,alpha:true,depth:true,antialias:true});
+    if(!gl) throw new Error("WebGL tidak tersedia.");
+    await gl.makeXRCompatible();
+    arState.gl=gl; arState.canvas=canvas; arState.layer=new XRWebGLLayer(session,gl); session.updateRenderState({baseLayer:arState.layer});
+    arState.refSpace=await session.requestReferenceSpace("local");
+    arState.viewerSpace=await session.requestReferenceSpace("viewer");
+    arState.hitSource=await session.requestHitTestSource({space:arState.viewerSpace});
+    const p=arMakeProgram(gl); arState.program=p.program; arState.buffer=p.buffer;
+    $("arStart").disabled=true; $("arStop").disabled=false; $("arMark").disabled=false; $("arReset").disabled=false;
+    arMessage("AR aktif. Arahkan kamera ke permukaan bertekstur/terang dan gerakkan HP perlahan sampai retikel kuning muncul.");
+    session.addEventListener("end",arCleanup);
+    session.requestAnimationFrame(arFrame);
+  }catch(e){
+    arCleanup();
+    arMessage("AR tidak dapat dimulai: "+(e&&e.message?e.message:"dukungan/izin tidak tersedia")+". Gunakan HTTPS Chrome Android dan pastikan layanan AR perangkat aktif.");
+  }
+}
+function arFrame(time,frame){
+  const session=frame.session,gl=arState.gl,pose=frame.getViewerPose(arState.refSpace);
+  if(!pose){session.requestAnimationFrame(arFrame);return;}
+  const layer=arState.layer;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
+  gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const hits=frame.getHitTestResults(arState.hitSource);
+  arState.latestPose=hits.length?hits[0].getPose(arState.refSpace):null;
+  for(const view of pose.views){
+    const vp=layer.getViewport(view); gl.viewport(vp.x,vp.y,vp.width,vp.height);
+    arState.currentView=view;
+    if(arState.latestPose){
+      // Hit pose transform is in reference space; draw a small yellow point.
+      const m=arState.latestPose.transform.matrix;
+      const pv=new Float32Array(16),out=new Float32Array(16);
+      mat4Multiply(pv,view.projectionMatrix,view.transform.inverse.matrix);mat4Multiply(out,pv,m);
+      gl.useProgram(arState.program);gl.bindBuffer(gl.ARRAY_BUFFER,arState.buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+      gl.uniformMatrix4fv(gl.getUniformLocation(arState.program,"mvp"),false,out);gl.drawArrays(gl.POINTS,0,1);
+    }
+  }
+  session.requestAnimationFrame(arFrame);
+}
+function arCleanup(){
+  try{if(arState.hitSource)arState.hitSource.cancel()}catch{}
+  arState.session=null;arState.hitSource=null;arState.latestPose=null;arState.points=[];arState.layer=null;arState.gl=null;
+  const c=$("arCanvas");if(c)c.remove();
+  if($("arStart"))$("arStart").disabled=false;
+  if($("arStop"))$("arStop").disabled=true;
+  if($("arMark")){ $("arMark").disabled=true; $("arMark").textContent="Tandai titik (pilih permukaan)"; $("arMark").onclick=arMarkPoint; }
+  if($("arReset"))$("arReset").disabled=true;
+  arReadout();
+}
+function arMarkPoint(){
+  if(!arState.latestPose){arMessage("Permukaan belum terdeteksi. Gerakkan kamera perlahan ke tanah/lantai.");return;}
+  if(arState.points.length>=2){arState.points=[];}
+  const m=arState.latestPose.transform.matrix;
+  arState.points.push({x:m[12],y:m[13],z:m[14]});
+  arReadout();
+  if(arState.points.length===1){
+    arMessage("Titik pertama ditandai. Arahkan kamera ke titik kedua lalu tandai lagi.");
+  }else{
+    arMessage("Dua titik ditandai. Verifikasi hasil dengan meteran sebelum digunakan.");
+    $("arMark").textContent="Pindahkan jarak ke ukuran sisi";
+    $("arMark").onclick=arSetLength;
+  }
+}
+$("arStart").onclick=arStart;
+$("arStop").onclick=()=>{if(arState.session)arState.session.end();arCleanup();arMessage("Sesi AR diakhiri.")};
+$("arMark").onclick=arMarkPoint;
+$("arReset").onclick=()=>{
+  arState.points=[];arReadout();
+  $("arMark").textContent="Tandai titik (pilih permukaan)";
+  $("arMark").onclick=arMarkPoint;
+  arMessage("Titik pengukuran dikosongkan.");
+};
 if("serviceWorker"in navigator&&location.protocol!=="file:")navigator.serviceWorker.register("./sw.js").catch(()=>{});
 })();
