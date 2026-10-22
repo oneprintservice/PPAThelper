@@ -29,3 +29,16 @@
 .pixel-robot.nexus b{left:12px;top:29px;width:26px;height:25px;clip-path:polygon(20% 0,80% 0,100% 25%,80% 100%,20% 100%,0 25%);box-shadow:-8px 0 0 -2px var(--dark),8px 0 0 -2px var(--dark),0 27px 0 -3px var(--dark)}
 .pixel-robot.nexus em{left:13px;top:56px;width:10px;height:18px;box-shadow:15px 0 0 var(--dark),1px 16px 0 -3px var(--metal),16px 16px 0 -3px var(--metal)}
 .pixel-robot.nexus:after{content:"";position:absolute;left:-6px;top:30px;width:8px;height:25px;background:var(--glow);border:3px solid var(--dark);box-shadow:49px 0 0 -1px var(--metal)}
+
+/* v0.3.2: distinct starter and enemy silhouettes */
+.starter .avatar{overflow:hidden}
+.starter .avatar .pixel-robot{flex:none}
+.pixel-robot.enemy-circuit-gremlin{--metal:#d7a94d;--dark:#6d4a20;--glow:#fff1a6;transform:scaleX(-1) scale(.9)}
+.pixel-robot.enemy-parts-phantom{--metal:#9a78db;--dark:#48336f;--glow:#f3dcff;transform:scaleX(-1) scale(.9)}
+.pixel-robot.enemy-mystery-chip{--metal:#c6d1df;--dark:#485b72;--glow:#ffca73;transform:scaleX(-1) scale(.9)}
+.pixel-robot.enemy-cursed-cancellation{--metal:#d34e6c;--dark:#5c1739;--glow:#ffd0dd;transform:scaleX(-1) scale(1.12)}
+.pixel-robot.enemy-repair-bot{--metal:#8aafbf;--dark:#365366;--glow:#fff0b5;transform:scaleX(-1) scale(.9)}
+.pixel-robot.enemy-circuit-gremlin i{width:22px;left:13px;clip-path:polygon(0 20%,35% 0,65% 12%,100% 0,100% 100%,0 100%)}
+.pixel-robot.enemy-parts-phantom b{clip-path:polygon(50% 0,100% 25%,80% 100%,20% 100%,0 25%)}
+.pixel-robot.enemy-mystery-chip i{width:34px;left:7px;height:24px}
+.pixel-robot.enemy-cursed-cancellation b{width:36px;left:6px;height:31px;clip-path:polygon(20% 0,80% 0,100% 50%,70% 100%,30% 100%,0 50%)}
