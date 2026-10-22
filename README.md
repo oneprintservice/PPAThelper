@@ -1,19 +1,21 @@
-# OnePrint Repair Rush — Prototype v0.2
+# OnePrint Repair Rush — Prototype v0.3
 
-Standalone HTML/CSS/JavaScript prototype. Open `index.html` in a modern browser. No build step, server, Firebase, WebPOS, or printer integration.
+Standalone HTML/CSS/JavaScript game prototype. No Firebase, no WebPOS integration, no printer integration.
 
-## Included in v0.2
-- Choose one of three BYTE starter specializations: VOLT, AEGIS, NEXUS.
-- Manual skill selection and animated battle effects.
-- Four active skill slots; new skills unlock every 5 levels. If slots are full, a prompt offers to replace an old skill.
-- Energy recovery after battle: set to 70% of maximum after a win and 40% after a loss. Rest is available at 0 energy and restores energy/HP fully.
-- HP recovers 50% of maximum after each battle, plus gradual regeneration over time.
-- Gear Scrap replaces generic components and is spent crafting upgrade items.
-- Local save, JSON export/import, and local reset.
-- Dummy service monsters only. Status `Selesai/Diambil` guarantees win; `Cancel` cannot be defeated; other statuses use a random 50–90% outcome chance.
-- Quick mode: 5 minutes then 30-minute cooldown. Relax mode: local device time windows 12:00–13:00 and 23:00–00:00.
+## Run
+Extract the ZIP and open `index.html` in a modern browser. Progress is saved in localStorage on that device/browser. Use Export Save for a portable JSON backup.
+
+## Implemented in v0.3
+- Summon one of three BYTE starter forms: VOLT (attack/critical), AEGIS (defense), NEXUS (energy efficiency).
+- Manual turn-based skill selection and CSS pixel-art humanoid robot sprites.
+- Enemy level and stats scale with BYTE level; transaction status remains dummy battle outcome modifier.
+- Battle rewards coins and Gear Scrap. Gear Scrap can be sold for coins.
+- Five craft categories: Weapon (+ATK), Armor (+DEF), Power Coil (+ATK/+DEF), Energy Cell (skill energy efficiency), Repair Kit (consumable HP + energy recovery).
+- Crafted gear can be equipped, sold, and upgraded using coins; gear level increases its bonus.
+- Individual coin upgrades for BYTE ATK, DEF, max HP, and energy efficiency.
+- HP does not auto-heal after battle. HP does not regenerate passively; Repair Kit or Rest can restore it. Energy is not restored after battle; use Repair Kit or Rest when energy reaches zero.
+- Local save export/import/reset, Mode Kilat and Mode Santai windows.
 
 ## Notes
-- Battle, balancing, animations and progression are still an early prototype; test on the target Android browser.
-- Save data from v0.1 is not automatically migrated; this version uses a separate localStorage key.
-- Sprite characters currently use emoji placeholders with CSS battle effects, not final pixel-art sprites.
+- All service transaction names and statuses are fictional dummy data.
+- This is an early prototype. Visuals are CSS pixel-art approximations, not final sprite sheets. Please test battle balance and save persistence in the target Android browser.
